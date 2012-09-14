@@ -191,7 +191,6 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
 -(NSTextCheckingResult*)linkAtCharacterIndex:(CFIndex)idx;
 -(NSTextCheckingResult*)linkAtPoint:(CGPoint)pt;
 -(void)resetTextFrame;
--(void)drawActiveLinkHighlightForRect:(CGRect)rect;
 -(void)recomputeLinksInTextIfNeeded;
 #if OHATTRIBUTEDLABEL_WARN_ABOUT_KNOWN_ISSUES
 -(void)warnAboutKnownIssues_CheckLineBreakMode_FromXIB:(BOOL)fromXIB;
@@ -504,6 +503,16 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
 	[self setNeedsDisplay];
 }
 
+- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
+{
+    UITouch *touch = [touches anyObject];
+    CGPoint pt = [touch locationInView:self];
+    BOOL closeToStart = (abs(_touchStartPoint.x - pt.x) < 10 && abs(_touchStartPoint.y - pt.y) < 10);
+    if (!closeToStart){
+        [self touchesCancelled:touches withEvent:event];
+    }
+}
+
 -(void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
 	UITouch* touch = [touches anyObject];
@@ -579,6 +588,13 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
             [mutAS autorelease];
 #endif
 		}
+        if (_activeLink){
+            NSRange activeLinkRange = _activeLink.range;
+            NSMutableAttributedString *mutattrst = [_attributedTextWithLinks mutableCopy];
+            [mutattrst setTextColor:self.highlightedLinkColor range:activeLinkRange];
+            attributedStringToDisplay = mutattrst;
+        }
+        
 		if (textFrame == NULL)
         {
 #if __has_feature(objc_arc)
@@ -609,10 +625,6 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
 		}
 		
 		// draw highlights for activeLink
-		if (_activeLink)
-        {
-			[self drawActiveLinkHighlightForRect:drawingRect];
-		}
 		
 		CTFrameDraw(textFrame, ctx);
 
@@ -622,67 +634,6 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
 	}
 }
 
--(void)drawActiveLinkHighlightForRect:(CGRect)rect
-{
-    if (!self.highlightedLinkColor) return;
-    
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	CGContextSaveGState(ctx);
-	CGContextConcatCTM(ctx, CGAffineTransformMakeTranslation(rect.origin.x, rect.origin.y));
-	[self.highlightedLinkColor setFill];
-	
-	NSRange activeLinkRange = _activeLink.range;
-	
-	CFArrayRef lines = CTFrameGetLines(textFrame);
-	CFIndex lineCount = CFArrayGetCount(lines);
-	CGPoint lineOrigins[lineCount];
-	CTFrameGetLineOrigins(textFrame, CFRangeMake(0,0), lineOrigins);
-	for (CFIndex lineIndex = 0; lineIndex < lineCount; lineIndex++)
-    {
-		CTLineRef line = CFArrayGetValueAtIndex(lines, lineIndex);
-		
-		if (!CTLineContainsCharactersFromStringRange(line, activeLinkRange))
-        {
-			continue; // with next line
-		}
-		
-		// we use this rect to union the bounds of successive runs that belong to the same active link
-		CGRect unionRect = CGRectZero;
-		
-		CFArrayRef runs = CTLineGetGlyphRuns(line);
-		CFIndex runCount = CFArrayGetCount(runs);
-		for (CFIndex runIndex = 0; runIndex < runCount; runIndex++)
-        {
-			CTRunRef run = CFArrayGetValueAtIndex(runs, runIndex);
-			
-			if (!CTRunContainsCharactersFromStringRange(run, activeLinkRange))
-            {
-				if (!CGRectIsEmpty(unionRect))
-                {
-					CGContextFillRect(ctx, unionRect);
-					unionRect = CGRectZero;
-				}
-				continue; // with next run
-			}
-			
-			CGRect linkRunRect = CTRunGetTypographicBoundsAsRect(run, line, lineOrigins[lineIndex]);
-			linkRunRect = CGRectIntegral(linkRunRect);		// putting the rect on pixel edges
-			linkRunRect = CGRectInset(linkRunRect, -1, -1);	// increase the rect a little
-			if (CGRectIsEmpty(unionRect))
-            {
-				unionRect = linkRunRect;
-			} else {
-				unionRect = CGRectUnion(unionRect, linkRunRect);
-			}
-		}
-		if (!CGRectIsEmpty(unionRect))
-        {
-			CGContextFillRect(ctx, unionRect);
-			//unionRect = CGRectZero;
-		}
-	}
-	CGContextRestoreGState(ctx);
-}
 
 - (CGSize)sizeThatFits:(CGSize)size
 {
