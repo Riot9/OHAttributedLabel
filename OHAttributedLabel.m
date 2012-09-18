@@ -226,14 +226,10 @@ const int UITextAlignmentJustify = ((UITextAlignment)kCTJustifiedTextAlignment);
 #endif
 	_linkUnderlineStyle = kCTUnderlineStyleSingle | kCTUnderlinePatternSolid;
     
-	self.automaticallyAddLinksForType = NSTextCheckingTypeLink;
-	if ([[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"tel:0"]]) {
-		self.automaticallyAddLinksForType |= NSTextCheckingTypePhoneNumber;
-	}
 	self.onlyCatchTouchesOnLinks = YES;
 	self.userInteractionEnabled = YES;
 	self.contentMode = UIViewContentModeRedraw;
-	[self resetAttributedText];
+//	[self resetAttributedText];
 }
 
 - (id) initWithFrame:(CGRect)aFrame
